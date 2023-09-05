@@ -8,5 +8,7 @@ certoraRun \
     certora/harness/MorphoHarness.sol \
     --verify MorphoHarness:certora/specs/AccrueInterest.spec \
     --solc_allow_path src \
+    --solc_via_ir \
+    --solc_optimize 4294967295 \
     --msg "Morpho Blue Accrue Interest" \
     "$@"

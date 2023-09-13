@@ -10,7 +10,7 @@ methods {
     function collateral(MorphoHarness.Id, address) external returns uint256 envfree;
     function fee(MorphoHarness.Id) external returns uint256 envfree;
     function lastUpdate(MorphoHarness.Id) external returns uint256 envfree;
-    function marketId(MorphoHarness.MarketParams) external returns MorphoHarness.Id envfree;
+    function libId(MorphoHarness.MarketParams) external returns MorphoHarness.Id envfree;
 
     function isAuthorized(address, address) external returns bool envfree;
     function isLltvEnabled(uint256) external returns bool envfree;
@@ -19,6 +19,7 @@ methods {
     function _.borrowRate(MorphoHarness.MarketParams, MorphoHarness.Market) external => HAVOC_ECF;
 
     function maxFee() external returns uint256 envfree;
+    function wad() external returns uint256 envfree;
 
     function SafeTransferLib.safeTransfer(address token, address to, uint256 value) internal => summarySafeTransferFrom(token, currentContract, to, value);
     function SafeTransferLib.safeTransferFrom(address token, address from, address to, uint256 value) internal => summarySafeTransferFrom(token, from, to, value);
@@ -79,9 +80,11 @@ hook Sstore market[KEY MorphoHarness.Id id].totalBorrowAssets uint128 newAmount 
 
 function summarySafeTransferFrom(address token, address from, address to, uint256 amount) {
     if (from == currentContract) {
+        // Safe require because the reference implementation would revert.
         myBalances[token] = require_uint256(myBalances[token] - amount);
     }
     if (to == currentContract) {
+        // Safe require because the reference implementation would revert.
         myBalances[token] = require_uint256(myBalances[token] + amount);
     }
 }
@@ -108,14 +111,15 @@ invariant borrowLessSupply(MorphoHarness.Id id)
 
 // This invariant is useful in the following rule, to link an id back to a market.
 invariant marketInvariant(MorphoHarness.MarketParams marketParams)
-    isCreated(marketId(marketParams)) =>
-    idToBorrowable[marketId(marketParams)] == marketParams.borrowableToken &&
-    idToCollateral[marketId(marketParams)] == marketParams.collateralToken;
+    isCreated(libId(marketParams)) =>
+    idToBorrowable[libId(marketParams)] == marketParams.borrowableToken &&
+    idToCollateral[libId(marketParams)] == marketParams.collateralToken;
 
 // Check that the idle amount on the singleton is greater to the sum amount, that is the sum over all the markets of the total supply plus the total collateral minus the total borrow.
 invariant isLiquid(address token)
     sumAmount[token] <= myBalances[token]
 {
+    // Safe requires on the sender because the contract cannot call the function itself.
     preserved supply(MorphoHarness.MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data) with (env e) {
         requireInvariant marketInvariant(marketParams);
         require e.msg.sender != currentContract;
@@ -148,19 +152,22 @@ invariant isLiquid(address token)
 
 // Check that a market can only exist if its LLTV is enabled.
 invariant onlyEnabledLltv(MorphoHarness.MarketParams marketParams)
-    isCreated(marketId(marketParams)) => isLltvEnabled(marketParams.lltv);
+    isCreated(libId(marketParams)) => isLltvEnabled(marketParams.lltv);
+
+invariant lltvSmallerThanWad(uint256 lltv)
+    isLltvEnabled(lltv) => lltv < wad();
 
 // Check that a market can only exist if its IRM is enabled.
 invariant onlyEnabledIrm(MorphoHarness.MarketParams marketParams)
-    isCreated(marketId(marketParams)) => isIrmEnabled(marketParams.irm);
+    isCreated(libId(marketParams)) => isIrmEnabled(marketParams.irm);
 
 // Check the pseudo-injectivity of the hashing function id().
-rule marketIdUnique() {
+rule libIdUnique() {
     MorphoHarness.MarketParams marketParams1;
     MorphoHarness.MarketParams marketParams2;
 
-    // Require the same arguments.
-    require marketId(marketParams1) == marketId(marketParams2);
+    // Assume that arguments are the same.
+    require libId(marketParams1) == libId(marketParams2);
 
     assert marketParams1.borrowableToken == marketParams2.borrowableToken;
     assert marketParams1.collateralToken == marketParams2.collateralToken;
@@ -178,7 +185,7 @@ filtered {
     address user;
     address someone;
 
-    // Require a different user to interact with Morpho.
+    // Assume that it is another user that is interacting with Morpho.
     require user != e.msg.sender;
 
     bool authorizedBefore = isAuthorized(user, someone);
@@ -197,7 +204,7 @@ filtered { f -> !f.isView }
     MorphoHarness.Id id;
     address user;
 
-    // Require that the e.msg.sender is not authorized.
+    // Assume that the e.msg.sender is not authorized.
     require !isAuthorized(user, e.msg.sender);
     require user != e.msg.sender;
 
@@ -217,7 +224,7 @@ filtered { f -> !f.isView }
     MorphoHarness.Id id;
     address user;
 
-    // Require that the e.msg.sender is not authorized.
+    // Assume that the e.msg.sender is not authorized.
     require !isAuthorized(user, e.msg.sender);
     require user != e.msg.sender;
 
@@ -240,7 +247,7 @@ filtered {
     MorphoHarness.Id id;
     address user;
 
-    // Require that the e.msg.sender is not authorized.
+    // Assume that the e.msg.sender is not authorized.
     require !isAuthorized(user, e.msg.sender);
     require user != e.msg.sender;
 
@@ -260,10 +267,10 @@ filtered { f -> !f.isView }
     MorphoHarness.Id id;
     address user;
 
-    // Require that the e.msg.sender is not authorized.
+    // Assume that the e.msg.sender is not authorized.
     require !isAuthorized(user, e.msg.sender);
     require user != e.msg.sender;
-    // Require that the user has no outstanding debt.
+    // Assume that the user has no outstanding debt.
     require borrowShares(id, user) == 0;
 
     mathint collateralBefore = collateral(id, user);
@@ -280,6 +287,7 @@ rule noTimeTravel(method f, env e, calldataarg args)
 filtered { f -> !f.isView }
 {
     MorphoHarness.Id id;
+    // Assume the property before the interaction.
     require lastUpdate(id) <= e.block.timestamp;
     f(e, args);
     assert lastUpdate(id) <= e.block.timestamp;

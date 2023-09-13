@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 methods {
     function extSloads(bytes32[]) external returns bytes32[] => NONDET DELETE(true);
-    function marketId(MorphoHarness.MarketParams) external returns MorphoHarness.Id envfree;
+    function libId(MorphoHarness.MarketParams) external returns MorphoHarness.Id envfree;
     function virtualTotalSupplyAssets(MorphoHarness.Id) external returns uint256 envfree;
     function virtualTotalSupplyShares(MorphoHarness.Id) external returns uint256 envfree;
     function virtualTotalBorrowAssets(MorphoHarness.Id) external returns uint256 envfree;
@@ -22,17 +22,17 @@ invariant feeInRange(MorphoHarness.Id id)
     fee(id) <= maxFee();
 
 // This is a simple overapproximative summary, stating that it rounds in the right direction.
-// The summary is checked by the specification in LibSummary.spec.
 function summaryMulDivUp(uint256 x, uint256 y, uint256 d) returns uint256 {
     uint256 result;
+    // Safe require that is checked by the specification in LibSummary.spec.
     require result * d >= x * y;
     return result;
 }
 
 // This is a simple overapproximative summary, stating that it rounds in the right direction.
-// The summary is checked by the specification in LibSummary.spec.
 function summaryMulDivDown(uint256 x, uint256 y, uint256 d) returns uint256 {
     uint256 result;
+    // Safe require that is checked by the specification in LibSummary.spec.
     require result * d <= x * y;
     return result;
 }
@@ -112,7 +112,7 @@ filtered {
     MorphoHarness.Id id;
     requireInvariant feeInRange(id);
 
-    // In;erest would increase borrow ratio, so we need to assume that no time passes.
+    // Interest would increase borrow ratio, so we need to assume that no time passes.
     require lastUpdate(id) == e.block.timestamp;
 
     mathint assetsBefore = virtualTotalBorrowAssets(id);
@@ -129,10 +129,10 @@ filtered {
 
 // Check that when not accruing interest, repay is decreasing the value of borrow shares.
 // Check the case where the market is not repaid fully.
-// The other case requires exact math (ie not summarizing mulDivUp and mulDivDown), so it is checked separately in ExactMath.spec
+// The other case requires exact math (ie not over-approximating mulDivUp and mulDivDown), so it is checked separately in ExactMath.spec.
 rule repayDecreasesBorrowRatio(env e, MorphoHarness.MarketParams marketParams, uint256 assets, uint256 shares, address onBehalf, bytes data)
 {
-    MorphoHarness.Id id = marketId(marketParams);
+    MorphoHarness.Id id = libId(marketParams);
     requireInvariant feeInRange(id);
 
     mathint assetsBefore = virtualTotalBorrowAssets(id);

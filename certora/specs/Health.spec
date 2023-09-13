@@ -7,7 +7,7 @@ methods {
     function collateral(MorphoHarness.Id, address) external returns uint256 envfree;
     function isHealthy(MorphoHarness.MarketParams, address user) external returns bool envfree;
     function isAuthorized(address, address user) external returns bool envfree;
-    function marketId(MorphoHarness.MarketParams) external returns MorphoHarness.Id envfree;
+    function libId(MorphoHarness.MarketParams) external returns MorphoHarness.Id envfree;
 
     function _.price() external => mockPrice() expect uint256;
     function MathLib.mulDivDown(uint256 a, uint256 b, uint256 c) internal returns uint256 => summaryMulDivDown(a,b,c);
@@ -28,11 +28,13 @@ function mockPrice() returns uint256 {
 }
 
 function summaryMulDivUp(uint256 x, uint256 y, uint256 d) returns uint256 {
+    // Safe requires because the reference implementation would revert.
     require d != 0;
     return require_uint256((x * y + (d - 1)) / d);
 }
 
 function summaryMulDivDown(uint256 x, uint256 y, uint256 d) returns uint256 {
+    // Safe requires because the reference implementation would revert.
     require d != 0;
     return require_uint256((x * y) / d);
 }
@@ -52,15 +54,14 @@ filtered {
 }
 {
     MorphoHarness.MarketParams marketParams;
-    MorphoHarness.Id id = marketId(marketParams);
+    MorphoHarness.Id id = libId(marketParams);
     address user;
 
-    // Require that the position is healthy before the interaction.
+    // Assume that the position is healthy before the interaction.
     require isHealthy(marketParams, user);
-    // Require that the LLTV takes coherent values.
+    // Safe require because of the invariants onlyEnabledLltv and lltvSmallerThanWad in ConsistentState.spec.
     require marketParams.lltv < 10^18;
-    require marketParams.lltv > 0;
-    // Ensure that no interest is accumulated.
+    // Assumption to ensure that no interest is accumulated.
     require lastUpdate(id) == e.block.timestamp;
 
     priceChanged = false;
@@ -78,15 +79,15 @@ rule healthyUserCannotLoseCollateral(env e, method f, calldataarg data)
 filtered { f -> !f.isView }
 {
     MorphoHarness.MarketParams marketParams;
-    MorphoHarness.Id id = marketId(marketParams);
+    MorphoHarness.Id id = libId(marketParams);
     address user;
 
-    // Require that the e.msg.sender is not authorized.
+    // Assume that the e.msg.sender is not authorized.
     require !isAuthorized(user, e.msg.sender);
     require user != e.msg.sender;
-    // Ensure that no interest is accumulated.
+    // Assumption to ensure that no interest is accumulated.
     require lastUpdate(id) == e.block.timestamp;
-    // Require that the user is healthy.
+    // Assume that the user is healthy.
     require isHealthy(marketParams, user);
 
     mathint collateralBefore = collateral(id, user);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 methods {
-    function safeTransfer(address, address, uint256) external envfree;
-    function safeTransferFrom(address, address, address, uint256) external envfree;
+    function libSafeTransfer(address, address, uint256) external envfree;
+    function libSafeTransferFrom(address, address, address, uint256) external envfree;
     function balanceOf(address, address) external returns (uint256) envfree;
     function allowance(address, address, address) external returns (uint256) envfree;
     function totalSupply(address) external returns (uint256) envfree;
@@ -20,9 +20,11 @@ ghost mapping(address => mathint) myBalances
 
 function summarySafeTransferFrom(address token, address from, address to, uint256 amount) {
     if (from == currentContract) {
+        // Safe require because the reference implementation would revert.
         myBalances[token] = require_uint256(myBalances[token] - amount);
     }
     if (to == currentContract) {
+        // Safe require because the reference implementation would revert.
         myBalances[token] = require_uint256(myBalances[token] + amount);
     }
 }
@@ -30,9 +32,10 @@ function summarySafeTransferFrom(address token, address from, address to, uint25
 // Check the functional correctness of the summary of safeTransfer.
 rule checkTransferSummary(address token, address to, uint256 amount) {
     mathint initialBalance = balanceOf(token, currentContract);
+    // Safe require because the total supply is greater than the sum of the balance of any two accounts.
     require to != currentContract => initialBalance + balanceOf(token, to) <= to_mathint(totalSupply(token));
 
-    safeTransfer(token, to, amount);
+    libSafeTransfer(token, to, amount);
     mathint finalBalance = balanceOf(token, currentContract);
 
     require myBalances[token] == initialBalance;
@@ -43,9 +46,10 @@ rule checkTransferSummary(address token, address to, uint256 amount) {
 // Check the functional correctness of the summary of safeTransferFrom.
 rule checkTransferFromSummary(address token, address from, uint256 amount) {
     mathint initialBalance = balanceOf(token, currentContract);
+    // Safe require because the total supply is greater than the sum of the balance of any two accounts.
     require from != currentContract => initialBalance + balanceOf(token, from) <= to_mathint(totalSupply(token));
 
-    safeTransferFrom(token, from, currentContract, amount);
+    libSafeTransferFrom(token, from, currentContract, amount);
     mathint finalBalance = balanceOf(token, currentContract);
 
     require myBalances[token] == initialBalance;
@@ -57,10 +61,12 @@ rule checkTransferFromSummary(address token, address from, uint256 amount) {
 rule transferRevertCondition(address token, address to, uint256 amount) {
     uint256 initialBalance = balanceOf(token, currentContract);
     uint256 toInitialBalance = balanceOf(token, to);
+    // Safe require because the total supply is greater than the sum of the balance of any two accounts.
     require to != currentContract => initialBalance + toInitialBalance <= to_mathint(totalSupply(token));
+    // Some tokens revert when either the sender or the receiver is the zero address.
     require currentContract != 0 && to != 0;
 
-    safeTransfer@withrevert(token, to, amount);
+    libSafeTransfer@withrevert(token, to, amount);
 
     assert lastReverted == (initialBalance < amount);
 }
@@ -70,10 +76,12 @@ rule transferFromRevertCondition(address token, address from, address to, uint25
     uint256 initialBalance = balanceOf(token, from);
     uint256 toInitialBalance = balanceOf(token, to);
     uint256 allowance = allowance(token, from, currentContract);
+    // Safe require because the total supply is greater than the sum of the balance of any two accounts.
     require to != from => initialBalance + toInitialBalance <= to_mathint(totalSupply(token));
+    // Some tokens revert when either the sender or the receiver is the zero address.
     require from != 0 && to != 0;
 
-    safeTransferFrom@withrevert(token, from, to, amount);
+    libSafeTransferFrom@withrevert(token, from, to, amount);
 
     assert lastReverted == (initialBalance < amount) || allowance < amount;
 }
